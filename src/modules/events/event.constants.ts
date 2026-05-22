@@ -1,0 +1,2 @@
+export const EVENT_TYPE_MAX_LENGTH = 100;
+export const IDEMPOTENCY_KEY_MAX_LENGTH = 255;

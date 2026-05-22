@@ -1,0 +1,238 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TemplateStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum TriggerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum EventProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum EmailJobStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+enum SendStatus {
+  SUCCESS
+  FAILED
+}
+
+model Template {
+  id String @id @default(cuid())
+
+  // References Supabase auth.users UUID
+  userId String
+
+  name String
+
+  // Generated server-side from template name
+  slug String
+
+  description String?
+
+  subject  String
+  bodyHtml String
+
+  // Example:
+  // ["user.name", "plan.name"]
+  variables String[]
+
+  status TemplateStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  triggers  Trigger[]
+  emailJobs EmailJob[]
+
+  @@unique([userId, slug])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("templates")
+}
+
+model Trigger {
+  id String @id @default(cuid())
+
+  // References Supabase auth.users UUID
+  userId String
+
+  name String
+
+  // Example:
+  // user.plan_upgraded
+  eventType String
+
+  // Example shape:
+  // {
+  //   "operator": "AND",
+  //   "rules": [
+  //     {
+  //       "field": "plan",
+  //       "op": "eq",
+  //       "value": "pro"
+  //     }
+  //   ]
+  // }
+  conditions Json
+
+  // Dot-path into event payload for recipient email
+  // Example: "user.email" or "contact.emailAddress"
+  recipientField String
+
+  sendOnce Boolean @default(false)
+
+  cooldownDays Int?
+
+  status TriggerStatus @default(ACTIVE)
+
+  templateId String
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  emailJobs EmailJob[]
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([status])
+  @@index([templateId])
+  @@index([createdAt])
+  @@map("triggers")
+}
+
+model Event {
+  id String @id @default(cuid())
+
+  // References Supabase auth.users UUID
+  userId String
+
+  eventType String
+
+  payload Json
+
+  idempotencyKey String
+
+  processingStatus EventProcessingStatus @default(PENDING)
+
+  processingError String?
+
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  emailJobs EmailJob[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId])
+  @@index([eventType])
+  @@index([processingStatus])
+  @@index([createdAt])
+  @@map("events")
+}
+
+model EmailJob {
+  id String @id @default(cuid())
+
+  // References Supabase auth.users UUID
+  userId String
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  triggerId String
+  trigger   Trigger @relation(fields: [triggerId], references: [id], onDelete: Restrict)
+
+  templateId String
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  recipientEmail String
+
+  // Immutable rendered snapshot
+  renderedSubject String?
+
+  // Immutable rendered snapshot
+  renderedHtml String?
+
+  status EmailJobStatus @default(PENDING)
+
+  retryCount Int @default(0)
+
+  nextRetryAt DateTime?
+
+  lastError String?
+
+  providerMessageId String?
+
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sendLogs SendLog[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([nextRetryAt])
+  @@index([recipientEmail])
+  @@index([eventId])
+  @@index([triggerId])
+  @@index([templateId])
+  @@index([createdAt])
+  @@map("email_jobs")
+}
+
+model SendLog {
+  id String @id @default(cuid())
+
+  // References Supabase auth.users UUID
+  userId String
+
+  emailJobId String
+  emailJob   EmailJob @relation(fields: [emailJobId], references: [id], onDelete: Cascade)
+
+  recipientEmail String
+
+  subject String
+
+  provider String
+
+  providerMessageId String?
+
+  status SendStatus
+
+  errorMessage String?
+
+  metadata Json?
+
+  sentAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([emailJobId])
+  @@index([recipientEmail])
+  @@index([status])
+  @@index([sentAt])
+  @@map("send_logs")
+}
