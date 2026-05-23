@@ -51,7 +51,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          INNGEST_BASE_URL: ${{ secrets.INNGEST_BASE_URL }}
           INNGEST_EVENT_KEY: ${{ secrets.INNGEST_EVENT_KEY }}
           INNGEST_SIGNING_KEY: ${{ secrets.INNGEST_SIGNING_KEY }}
           EOF

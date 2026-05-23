@@ -24,14 +24,14 @@ const conditionGroupSchema: z.ZodType<ConditionGroupInput> = z.object({
   operator: z.enum(GROUP_OPERATORS),
   rules: z
     .array(z.union([conditionRuleSchema, z.lazy(() => conditionGroupSchema)]))
-    .min(1, "At least one rule is required"),
+    .default([]),
 });
 
 export const createTriggerSchema = z.object({
   name: z.string().min(1, "Name is required").max(TRIGGER_NAME_MAX_LENGTH),
   eventType: z.string().min(1, "Event type is required").max(TRIGGER_EVENT_TYPE_MAX_LENGTH),
   templateId: z.string().min(1, "Template ID is required"),
-  conditions: conditionGroupSchema,
+  conditions: conditionGroupSchema.optional().default({ operator: "AND", rules: [] }),
   recipientField: z.string().min(1, "Recipient field path is required"),
   sendOnce: z.boolean().default(false),
   cooldownDays: z
@@ -39,7 +39,8 @@ export const createTriggerSchema = z.object({
     .int()
     .nonnegative()
     .max(MAX_COOLDOWN_DAYS)
-    .optional(),
+    .optional()
+    .default(0),
 });
 
 export const updateTriggerSchema = createTriggerSchema
