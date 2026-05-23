@@ -12,6 +12,12 @@ export function extractPlaceholders(text: string): string[] {
 }
 
 export function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  // First, check if the path exists as a direct key (e.g., "user.name")
+  if (Object.prototype.hasOwnProperty.call(obj, path)) {
+    return obj[path];
+  }
+
+  // Otherwise, traverse the object path
   const keys = path.split(".");
   let current: unknown = obj;
 
