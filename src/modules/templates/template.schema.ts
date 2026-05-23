@@ -5,13 +5,12 @@ import {
   TEMPLATE_DESCRIPTION_MAX_LENGTH,
 } from "./template.constants.js";
 
-const templateStatusSchema = z.enum([
-  "DRAFT",
-  "ACTIVE",
-  "ARCHIVED",
-]);
+const templateStatusSchema = z.preprocess(
+  (val) => (typeof val === "string" ? val.toUpperCase() : val),
+  z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]),
+);
 
-export const createTemplateSchema = z.object({
+const baseTemplateSchema = z.object({
   name: z.string().min(1, "Name is required").max(TEMPLATE_NAME_MAX_LENGTH),
 
   subject: z
@@ -26,10 +25,14 @@ export const createTemplateSchema = z.object({
     .max(TEMPLATE_DESCRIPTION_MAX_LENGTH)
     .optional(),
 
+  status: templateStatusSchema,
+});
+
+export const createTemplateSchema = baseTemplateSchema.extend({
   status: templateStatusSchema.default("ACTIVE"),
 });
 
-export const updateTemplateSchema = createTemplateSchema
+export const updateTemplateSchema = baseTemplateSchema
   .partial()
   .refine((data) => Object.keys(data).length > 0, {
     message: "At least one field must be provided for update",

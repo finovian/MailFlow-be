@@ -39,6 +39,7 @@ export async function create(userId: string, data: CreateTemplateInput) {
       bodyHtml: data.bodyHtml,
       description: data.description ?? null,
       variables,
+      status: data.status,
     },
   });
 
