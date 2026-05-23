@@ -14,6 +14,16 @@ export interface ConditionGroup {
   rules: Array<ConditionRule | ConditionGroup>;
 }
 
+export interface EvaluationResult {
+  passed: boolean;
+  failedCondition?: {
+    field: string;
+    operator: string;
+    expected?: unknown;
+    actual?: unknown;
+  };
+}
+
 export type DeduplicationChecker = (
   triggerId: string,
   recipientEmail: string,
@@ -28,63 +38,80 @@ async function evaluateRule(
   rule: ConditionRule,
   payload: Record<string, unknown>,
   context?: { triggerId: string; recipientEmail: string; deduplicationChecker?: DeduplicationChecker },
-): Promise<boolean> {
+): Promise<EvaluationResult> {
+  const fieldValue = getNestedValue(payload, rule.field);
+
+  let passed = false;
+
   if (rule.op === "not_sent_within_days") {
     if (!context?.deduplicationChecker) {
       log.warn("not_sent_within_days operator used without deduplication checker — defaulting to true");
-      return true;
+      passed = true;
+    } else {
+      const days = Number(rule.value) || 0;
+      passed = await context.deduplicationChecker(context.triggerId, context.recipientEmail, days);
     }
-    const days = Number(rule.value) || 0;
-    return context.deduplicationChecker(context.triggerId, context.recipientEmail, days);
+  } else {
+    switch (rule.op) {
+      case "eq":
+        passed = fieldValue === rule.value;
+        break;
+      case "neq":
+        passed = fieldValue !== rule.value;
+        break;
+      case "gt":
+        passed = typeof fieldValue === "number" && typeof rule.value === "number" && fieldValue > rule.value;
+        break;
+      case "gte":
+        passed = typeof fieldValue === "number" && typeof rule.value === "number" && fieldValue >= rule.value;
+        break;
+      case "lt":
+        passed = typeof fieldValue === "number" && typeof rule.value === "number" && fieldValue < rule.value;
+        break;
+      case "lte":
+        passed = typeof fieldValue === "number" && typeof rule.value === "number" && fieldValue <= rule.value;
+        break;
+      case "contains":
+        passed = typeof fieldValue === "string" && typeof rule.value === "string" && fieldValue.includes(rule.value);
+        break;
+      case "not_contains":
+        passed = typeof fieldValue === "string" && typeof rule.value === "string" && !fieldValue.includes(rule.value);
+        break;
+      case "exists":
+        passed = fieldValue !== undefined && fieldValue !== null;
+        break;
+      default:
+        log.warn({ op: rule.op }, "Unknown condition operator — defaulting to false");
+        passed = false;
+    }
   }
 
-  const fieldValue = getNestedValue(payload, rule.field);
-
-  switch (rule.op) {
-    case "eq":
-      return fieldValue === rule.value;
-
-    case "neq":
-      return fieldValue !== rule.value;
-
-    case "gt":
-      return typeof fieldValue === "number" && typeof rule.value === "number" && fieldValue > rule.value;
-
-    case "gte":
-      return typeof fieldValue === "number" && typeof rule.value === "number" && fieldValue >= rule.value;
-
-    case "lt":
-      return typeof fieldValue === "number" && typeof rule.value === "number" && fieldValue < rule.value;
-
-    case "lte":
-      return typeof fieldValue === "number" && typeof rule.value === "number" && fieldValue <= rule.value;
-
-    case "contains":
-      return typeof fieldValue === "string" && typeof rule.value === "string" && fieldValue.includes(rule.value);
-
-    case "not_contains":
-      return typeof fieldValue === "string" && typeof rule.value === "string" && !fieldValue.includes(rule.value);
-
-    case "exists":
-      return fieldValue !== undefined && fieldValue !== null;
-
-    default:
-      log.warn({ op: rule.op }, "Unknown condition operator — defaulting to false");
-      return false;
+  if (passed) {
+    return { passed: true };
   }
+
+  return {
+    passed: false,
+    failedCondition: {
+      field: rule.field,
+      operator: rule.op,
+      expected: rule.value,
+      actual: fieldValue,
+    },
+  };
 }
 
 export async function evaluateConditions(
   conditions: ConditionGroup,
   payload: Record<string, unknown>,
   context?: { triggerId: string; recipientEmail: string; deduplicationChecker?: DeduplicationChecker },
-): Promise<boolean> {
+): Promise<EvaluationResult> {
   const { operator, rules } = conditions;
 
-  const results: boolean[] = [];
+  const results: EvaluationResult[] = [];
 
   for (const rule of rules) {
-    let result: boolean;
+    let result: EvaluationResult;
 
     if (isConditionGroup(rule)) {
       result = await evaluateConditions(rule, payload, context);
@@ -95,16 +122,22 @@ export async function evaluateConditions(
     results.push(result);
 
     // Short-circuit: AND fails fast on false, OR succeeds fast on true
-    if (operator === "AND" && !result) {
+    if (operator === "AND" && !result.passed) {
       log.debug({ operator, failedAt: rule }, "AND group short-circuited");
-      return false;
+      return result;
     }
-    if (operator === "OR" && result) {
+    if (operator === "OR" && result.passed) {
       log.debug({ operator, matchedAt: rule }, "OR group short-circuited");
-      return true;
+      return { passed: true };
     }
   }
 
   // AND: all true → true; OR: none true → false
-  return operator === "AND" ? results.every(Boolean) : results.some(Boolean);
+  if (operator === "AND") {
+    return { passed: true };
+  } else {
+    // For OR, if we reached here, all failed. Return the first failure.
+    const firstFailed = results.find((r) => !r.passed);
+    return firstFailed || { passed: false };
+  }
 }

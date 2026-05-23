@@ -12,7 +12,7 @@ import type { Prisma } from "@prisma/client";
 const log = createModuleLogger("event-service");
 
 export async function create(userId: string, data: CreateEventInput) {
-  // Check idempotency
+
   const existing = await prisma.event.findUnique({
     where: {
       userId_idempotencyKey: {
@@ -27,7 +27,7 @@ export async function create(userId: string, data: CreateEventInput) {
     throw new ConflictError("Event with this idempotency key already exists");
   }
 
-  // Create event record
+
   const event = await prisma.event.create({
     data: {
       userId,
@@ -38,18 +38,27 @@ export async function create(userId: string, data: CreateEventInput) {
     },
   });
 
-  // Invoke Inngest workflow
+// Invoke Inngest workflow
+let queued = false;
+try {
   await inngest.send({
     name: "app/event.received",
     data: { eventId: event.id },
   });
+  queued = true;
+} catch (err) {
+  log.error({ err, eventId: event.id }, "Failed to send event to Inngest (Background processing will not start)");
+}
 
-
-
-  log.info(
-    { eventId: event.id, eventType: data.eventType, idempotencyKey: data.idempotencyKey },
-    "Event created and queued for processing",
-  );
+log.info(
+  { 
+    eventId: event.id, 
+    eventType: data.eventType, 
+    idempotencyKey: data.idempotencyKey,
+    queued
+  },
+  queued ? "Event created and queued for processing" : "Event created but NOT queued (Inngest offline)"
+);
 
   return event;
 }

@@ -8,7 +8,8 @@ import { createModuleLogger } from "../lib/logger.js";
 const log = createModuleLogger("event-processor");
 
 export async function processEvent(eventId: string): Promise<void> {
-  // 1. Fetch event
+  const timeline: any[] = [];
+
   const event = await prisma.event.findUnique({ where: { id: eventId } });
 
   if (!event) {
@@ -21,7 +22,18 @@ export async function processEvent(eventId: string): Promise<void> {
     return;
   }
 
-  // 2. Mark as PROCESSING
+  timeline.push({
+    step: "EVENT_INGESTED",
+    status: "SUCCESS",
+    message: "Payload stored successfully",
+  });
+
+  timeline.push({
+    step: "WORKFLOW_TRIGGERED",
+    status: "SUCCESS",
+    message: "Inngest workflow started",
+  });
+
   await prisma.event.update({
     where: { id: eventId },
     data: { processingStatus: "PROCESSING" },
@@ -32,22 +44,30 @@ export async function processEvent(eventId: string): Promise<void> {
   let jobsCreated = 0;
 
   try {
-    // 3. Find matching triggers
     const triggers = await findMatchingTriggers(event.userId, event.eventType);
 
     if (triggers.length === 0) {
       log.info({ eventId, eventType: event.eventType }, "No matching triggers found");
+
+      timeline.push({
+        step: "TRIGGER_MATCHING",
+        status: "SKIPPED",
+        message: `No matching automation triggers found for event type "${event.eventType}"`,
+      });
+
       await prisma.event.update({
         where: { id: eventId },
-        data: { processingStatus: "COMPLETED", processedAt: new Date() },
+        data: {
+          processingStatus: "COMPLETED",
+          processedAt: new Date(),
+          processingError: JSON.stringify({ timeline }),
+        },
       });
       return;
     }
 
-    // 4. Process each trigger
     for (const trigger of triggers) {
       try {
-        // 4a. Resolve recipient email from payload using trigger.recipientField
         const recipientEmail = getNestedValue(payload, trigger.recipientField);
 
         if (!recipientEmail || typeof recipientEmail !== "string") {
@@ -55,20 +75,38 @@ export async function processEvent(eventId: string): Promise<void> {
             { triggerId: trigger.id, recipientField: trigger.recipientField },
             "Could not resolve recipient email from payload — skipping trigger",
           );
+
+          timeline.push({
+            step: "TRIGGER_EVALUATED",
+            status: "SKIPPED",
+            triggerName: trigger.name,
+            message: "Could not resolve recipient email from payload",
+          });
           continue;
         }
 
-        // 4b. Evaluate trigger
-        const shouldFire = await evaluateTrigger(trigger, payload, recipientEmail);
+        const evalResult = await evaluateTrigger(trigger, payload, recipientEmail);
 
-        if (!shouldFire) {
+        if (!evalResult.passed) {
+          timeline.push({
+            step: "TRIGGER_EVALUATED",
+            status: "SKIPPED",
+            triggerName: trigger.name,
+            message: "Trigger conditions were not met",
+            details: evalResult.failedCondition,
+          });
           continue;
         }
 
-        // 4c. Render email
+        timeline.push({
+          step: "TRIGGER_EVALUATED",
+          status: "SUCCESS",
+          triggerName: trigger.name,
+          message: "Conditions met",
+        });
+
         const rendered = renderEmail(trigger.template, payload);
 
-        // 4d. Create job + send + log in transaction
         await prisma.$transaction(async (tx) => {
           // Create EmailJob
           const job = await tx.emailJob.create({
@@ -82,6 +120,12 @@ export async function processEvent(eventId: string): Promise<void> {
               renderedHtml: rendered.html,
               status: "PROCESSING",
             },
+          });
+
+          timeline.push({
+            step: "EMAIL_JOB_CREATED",
+            status: "SUCCESS",
+            message: `Email job created for ${recipientEmail}`,
           });
 
           jobsCreated++;
@@ -118,6 +162,12 @@ export async function processEvent(eventId: string): Promise<void> {
             },
           });
 
+          timeline.push({
+            step: "EMAIL_SENT",
+            status: result.success ? "SUCCESS" : "FAILED",
+            message: result.success ? "Email sent successfully" : result.error,
+          });
+
           if (!result.success) {
             hasFailures = true;
           }
@@ -138,18 +188,33 @@ export async function processEvent(eventId: string): Promise<void> {
           { triggerId: trigger.id, eventId, err: triggerError },
           "Error processing trigger — continuing with remaining triggers",
         );
+
+        timeline.push({
+          step: "FAILED",
+          status: "FAILED",
+          message: triggerError instanceof Error ? triggerError.message : "Unknown error processing trigger",
+        });
       }
     }
+if (jobsCreated === 0 && !hasFailures) {
+  timeline.push({
+    step: "TRIGGER_EVALUATED",
+    status: "SKIPPED",
+    message: "Automation flow stopped: No triggers met the required conditions",
+  });
+}
 
-    // 5. Update event status
-    await prisma.event.update({
-      where: { id: eventId },
-      data: {
-        processingStatus: hasFailures && jobsCreated === 0 ? "FAILED" : "COMPLETED",
-        processedAt: new Date(),
-        processingError: hasFailures ? "One or more triggers failed to process" : null,
-      },
-    });
+// 5. Update event status
+await prisma.event.update({
+  where: { id: eventId },
+  data: {
+    processingStatus: hasFailures && jobsCreated === 0 ? "FAILED" : "COMPLETED",
+    processedAt: new Date(),
+    processingError: JSON.stringify({
+      timeline,
+    }),
+  },
+});
 
     log.info(
       { eventId, jobsCreated, hasFailures },
@@ -158,12 +223,21 @@ export async function processEvent(eventId: string): Promise<void> {
   } catch (err) {
     log.error({ eventId, err }, "Critical error during event processing");
 
+    timeline.push({
+      step: "FAILED",
+      status: "FAILED",
+      message: err instanceof Error ? err.message : "Critical processing error",
+    });
+
     await prisma.event.update({
       where: { id: eventId },
       data: {
         processingStatus: "FAILED",
         processedAt: new Date(),
-        processingError: err instanceof Error ? err.message : "Unknown error",
+        processingError: JSON.stringify({
+          timeline,
+          error: err instanceof Error ? err.message : "Unknown error",
+        }),
       },
     });
   }
@@ -184,7 +258,6 @@ export async function processJob(jobId: string): Promise<void> {
     return;
   }
 
-  // Update status to PROCESSING
   await prisma.emailJob.update({
     where: { id: jobId },
     data: { status: "PROCESSING" },
@@ -193,14 +266,14 @@ export async function processJob(jobId: string): Promise<void> {
   const subject = job.renderedSubject || "";
   const html = job.renderedHtml || "";
 
-  // Send email
+
   const result = await sendEmail({
     to: job.recipientEmail,
     subject,
     html,
   });
 
-  // Update job status and log in transaction
+
   await prisma.$transaction(async (tx) => {
     await tx.emailJob.update({
       where: { id: job.id },

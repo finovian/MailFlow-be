@@ -3,18 +3,17 @@ import { createModuleLogger } from "../lib/logger.js";
 
 const log = createModuleLogger("email-render");
 
-const PLACEHOLDER_REGEX = /\{\{(\s*[\w.]+\s*)\}\}/g;
+const PLACEHOLDER_REGEX = /\{\{\s*([\w.-]+)\s*\}\}/g;
 
 export function renderTemplate(
   templateString: string,
   payload: Record<string, unknown>,
 ): string {
   return templateString.replace(PLACEHOLDER_REGEX, (_match, path: string) => {
-    const trimmedPath = path.trim();
-    const value = getNestedValue(payload, trimmedPath);
+    const value = getNestedValue(payload, path);
 
     if (value === undefined || value === null) {
-      log.warn({ placeholder: trimmedPath }, "Missing placeholder value during render");
+      log.warn({ placeholder: path }, "Missing placeholder value during render");
       return "";
     }
 

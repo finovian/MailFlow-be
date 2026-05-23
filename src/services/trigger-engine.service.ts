@@ -85,11 +85,17 @@ export async function checkSendOnce(
   return isSafeToSend;
 }
 
+export interface TriggerEvaluationResult {
+  passed: boolean;
+  reason?: string;
+  failedCondition?: any;
+}
+
 export async function evaluateTrigger(
   trigger: TriggerWithTemplate,
   payload: Record<string, unknown>,
   recipientEmail: string,
-): Promise<boolean> {
+): Promise<TriggerEvaluationResult> {
   // 1. Check sendOnce dedup
   if (trigger.sendOnce) {
     const safeToSend = await checkSendOnce(trigger.id, recipientEmail);
@@ -98,7 +104,7 @@ export async function evaluateTrigger(
         { triggerId: trigger.id, recipientEmail },
         "Trigger skipped — sendOnce already fulfilled",
       );
-      return false;
+      return { passed: false, reason: "sendOnce already fulfilled" };
     }
   }
 
@@ -110,29 +116,33 @@ export async function evaluateTrigger(
         { triggerId: trigger.id, recipientEmail, cooldownDays: trigger.cooldownDays },
         "Trigger skipped — within cooldown period",
       );
-      return false;
+      return { passed: false, reason: "within cooldown period" };
     }
   }
 
   // 3. Evaluate conditions
   const conditions = trigger.conditions as unknown as ConditionGroup;
-  const conditionsPass = await evaluateConditions(conditions, payload, {
+  const result = await evaluateConditions(conditions, payload, {
     triggerId: trigger.id,
     recipientEmail,
     deduplicationChecker: checkDeduplication,
   });
 
-  if (!conditionsPass) {
+  if (!result.passed) {
     log.info(
       { triggerId: trigger.id, recipientEmail },
       "Trigger skipped — conditions not met",
     );
-    return false;
+    return {
+      passed: false,
+      reason: "Condition failed",
+      failedCondition: result.failedCondition,
+    };
   }
 
   log.info(
     { triggerId: trigger.id, recipientEmail },
     "Trigger matched — all checks passed",
   );
-  return true;
+  return { passed: true };
 }

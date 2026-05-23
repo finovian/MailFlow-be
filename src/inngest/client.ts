@@ -1,13 +1,14 @@
 import { Inngest } from "inngest"
+import { env } from "../config/env.js"
 
-const isDev = process.env.NODE_ENV !== "production"
+const isDev = env.NODE_ENV === "development"
 
 export const inngest = new Inngest({
     id: "email-automation-platform",
     isDev,
-    eventKey: process.env.INNGEST_EVENT_KEY,
-    signingKey: process.env.INNGEST_SIGNING_KEY,
+    eventKey: env.INNGEST_EVENT_KEY,
+    signingKey: env.INNGEST_SIGNING_KEY,
     ...(isDev && {
-        baseUrl: "http://localhost:8288",
+        baseUrl: "http://127.0.0.1:8288",
     }),
 })

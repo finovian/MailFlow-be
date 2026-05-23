@@ -31,6 +31,7 @@ export async function create(userId: string, data: CreateTriggerInput) {
       recipientField: data.recipientField,
       sendOnce: data.sendOnce,
       cooldownDays: data.cooldownDays ?? null,
+      status: data.status,
     },
     include: {
       template: {

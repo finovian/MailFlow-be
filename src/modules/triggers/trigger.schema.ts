@@ -27,6 +27,11 @@ const conditionGroupSchema: z.ZodType<ConditionGroupInput> = z.object({
     .default([]),
 });
 
+const triggerStatusSchema = z.preprocess(
+  (val) => (typeof val === "string" ? val.toUpperCase() : val),
+  z.enum(["ACTIVE", "INACTIVE"]),
+);
+
 export const createTriggerSchema = z.object({
   name: z.string().min(1, "Name is required").max(TRIGGER_NAME_MAX_LENGTH),
   eventType: z.string().min(1, "Event type is required").max(TRIGGER_EVENT_TYPE_MAX_LENGTH),
@@ -41,6 +46,7 @@ export const createTriggerSchema = z.object({
     .max(MAX_COOLDOWN_DAYS)
     .optional()
     .default(0),
+  status: triggerStatusSchema.default("ACTIVE"),
 });
 
 export const updateTriggerSchema = createTriggerSchema
