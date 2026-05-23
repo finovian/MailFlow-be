@@ -49,11 +49,4 @@ jobs:
             --region $REGION \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars="DATABASE_URL=${{ secrets.DATABASE_URL }},\
-          SUPABASE_URL=${{ secrets.SUPABASE_URL }},\
-          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }},\
-          RESEND_API_KEY=${{ secrets.RESEND_API_KEY }},\
-          RESEND_FROM_EMAIL=${{ secrets.RESEND_FROM_EMAIL }},\
-          INNGEST_BASE_URL=${{ secrets.INNGEST_BASE_URL }},\
-          INNGEST_EVENT_KEY=${{ secrets.INNGEST_EVENT_KEY }},\
-          INNGEST_SIGNING_KEY=${{ secrets.INNGEST_SIGNING_KEY }}"
+            --set-env-vars="^@^NODE_ENV=production@DATABASE_URL=${{ secrets.DATABASE_URL }}@SUPABASE_URL=${{ secrets.SUPABASE_URL }}@SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}@RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}@RESEND_FROM_EMAIL=${{ secrets.RESEND_FROM_EMAIL }}@INNGEST_BASE_URL=${{ secrets.INNGEST_BASE_URL }}@INNGEST_EVENT_KEY=${{ secrets.INNGEST_EVENT_KEY }}@INNGEST_SIGNING_KEY=${{ secrets.INNGEST_SIGNING_KEY }}"
