@@ -269,23 +269,30 @@ Create:
 Example:
 
 ```env
+DATABASE_URL="postgresql://postgres.username:[passsword]@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true"
+DIRECT_URL="postgresql://postgres.username:passsword@db.bvgcrhbhwymisxptfllm.supabase.co:5432/postgres"
+
 NODE_ENV=development
 PORT=8000
 
-DATABASE_URL=
-DIRECT_URL=
 
-RESEND_API_KEY=
-RESEND_FROM_EMAIL=
+SUPABASE_URL=https://
+SUPABASE_SERVICE_ROLE_KEY=eyyxxxxx
 
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
 
-INNGEST_DEV=1
+RESEND_API_KEY=re_xxxxxxxxxxxxx
+RESEND_FROM_EMAIL=noreply@finovian.com
+
+
+INNGEST_DEV=true
 INNGEST_BASE_URL=http://localhost:8288
 
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+
+INNGEST_EVENT_KEY=zFCSxxxxxxxxxxxxxxxxxxxxxxxxxxx
+INNGEST_SIGNING_KEY=signkey-prod-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+
+
 
 ```
 
