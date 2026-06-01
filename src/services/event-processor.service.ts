@@ -17,7 +17,10 @@ export async function processEvent(eventId: string): Promise<void> {
     return;
   }
 
-  if (event.processingStatus !== "PENDING") {
+  if (
+    event.processingStatus !== "PENDING" &&
+    event.processingStatus !== "FAILED"
+  ) {
     log.warn({ eventId, status: event.processingStatus }, "Event already processed — skipping");
     return;
   }
@@ -196,25 +199,25 @@ export async function processEvent(eventId: string): Promise<void> {
         });
       }
     }
-if (jobsCreated === 0 && !hasFailures) {
-  timeline.push({
-    step: "TRIGGER_EVALUATED",
-    status: "SKIPPED",
-    message: "Automation flow stopped: No triggers met the required conditions",
-  });
-}
+    if (jobsCreated === 0 && !hasFailures) {
+      timeline.push({
+        step: "TRIGGER_EVALUATED",
+        status: "SKIPPED",
+        message: "Automation flow stopped: No triggers met the required conditions",
+      });
+    }
 
-// 5. Update event status
-await prisma.event.update({
-  where: { id: eventId },
-  data: {
-    processingStatus: hasFailures && jobsCreated === 0 ? "FAILED" : "COMPLETED",
-    processedAt: new Date(),
-    processingError: JSON.stringify({
-      timeline,
-    }),
-  },
-});
+    // 5. Update event status
+    await prisma.event.update({
+      where: { id: eventId },
+      data: {
+        processingStatus: hasFailures && jobsCreated === 0 ? "FAILED" : "COMPLETED",
+        processedAt: new Date(),
+        processingError: JSON.stringify({
+          timeline,
+        }),
+      },
+    });
 
     log.info(
       { eventId, jobsCreated, hasFailures },
@@ -226,7 +229,10 @@ await prisma.event.update({
     timeline.push({
       step: "FAILED",
       status: "FAILED",
-      message: err instanceof Error ? err.message : "Critical processing error",
+      message:
+        err instanceof Error
+          ? err.message
+          : "Critical processing error",
     });
 
     await prisma.event.update({
@@ -236,10 +242,15 @@ await prisma.event.update({
         processedAt: new Date(),
         processingError: JSON.stringify({
           timeline,
-          error: err instanceof Error ? err.message : "Unknown error",
+          error:
+            err instanceof Error
+              ? err.message
+              : "Unknown error",
         }),
       },
     });
+
+    throw err;
   }
 }
 

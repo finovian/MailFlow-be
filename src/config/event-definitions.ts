@@ -87,15 +87,16 @@ export const EVENT_DEFINITIONS: readonly EventDefinition[] = [
     categoryLabel: 'Event Events',
     description: 'Fires when a scheduled event is marked as completed.',
     fields: [
+      { name: 'event.organizerEmail', label: 'Organizer Email', type: 'string' },
       { name: 'event.name', label: 'Event Name', type: 'string' },
       { name: 'event.date', label: 'Event Date', type: 'date' },
       { name: 'event.attendees', label: 'Attendees', type: 'number' },
     ],
     payloadSchema: {
-      event: { name: 'string', date: 'date', attendees: 'number' },
+      event: { organizerEmail: 'string', name: 'string', date: 'date', attendees: 'number' },
     },
     mockPayload: {
-      event: { name: 'Q2 Webinar', date: '2026-06-01T14:00:00Z', attendees: 340 },
+      event: { organizerEmail: 'organizer@example.com', name: 'Q2 Webinar', date: '2026-06-01T14:00:00Z', attendees: 340 },
     },
   },
   {
@@ -105,15 +106,16 @@ export const EVENT_DEFINITIONS: readonly EventDefinition[] = [
     categoryLabel: 'Event Events',
     description: 'Fires when a scheduled event is cancelled.',
     fields: [
+      { name: 'event.organizerEmail', label: 'Organizer Email', type: 'string' },
       { name: 'event.name', label: 'Event Name', type: 'string' },
       { name: 'event.date', label: 'Event Date', type: 'date' },
       { name: 'event.reason', label: 'Reason', type: 'string' },
     ],
     payloadSchema: {
-      event: { name: 'string', date: 'date', reason: 'string' },
+      event: { organizerEmail: 'string', name: 'string', date: 'date', reason: 'string' },
     },
     mockPayload: {
-      event: { name: 'Q2 Webinar', date: '2026-06-01T14:00:00Z', reason: 'Speaker unavailable' },
+      event: { organizerEmail: 'organizer@example.com', name: 'Q2 Webinar', date: '2026-06-01T14:00:00Z', reason: 'Speaker unavailable' },
     },
   },
   {
@@ -123,15 +125,16 @@ export const EVENT_DEFINITIONS: readonly EventDefinition[] = [
     categoryLabel: 'Event Events',
     description: 'Fires as a reminder before a scheduled event.',
     fields: [
+      { name: 'event.organizerEmail', label: 'Organizer Email', type: 'string' },
       { name: 'event.name', label: 'Event Name', type: 'string' },
       { name: 'event.date', label: 'Event Date', type: 'date' },
       { name: 'event.daysUntil', label: 'Days Until Event', type: 'number' },
     ],
     payloadSchema: {
-      event: { name: 'string', date: 'date', daysUntil: 'number' },
+      event: { organizerEmail: 'string', name: 'string', date: 'date', daysUntil: 'number' },
     },
     mockPayload: {
-      event: { name: 'Q2 Webinar', date: '2026-06-01T14:00:00Z', daysUntil: 3 },
+      event: { organizerEmail: 'organizer@example.com', name: 'Q2 Webinar', date: '2026-06-01T14:00:00Z', daysUntil: 3 },
     },
   },
 

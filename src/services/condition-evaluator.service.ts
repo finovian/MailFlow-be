@@ -121,7 +121,7 @@ export async function evaluateConditions(
 
     results.push(result);
 
-    // Short-circuit: AND fails fast on false, OR succeeds fast on true
+
     if (operator === "AND" && !result.passed) {
       log.debug({ operator, failedAt: rule }, "AND group short-circuited");
       return result;
