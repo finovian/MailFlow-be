@@ -126,6 +126,14 @@ export async function processEvent(eventId: string): Promise<void> {
           },
         });
 
+        timeline.push({
+          step: "EMAIL_JOB_CREATED",
+          status: "SUCCESS",
+          message: `Email job created for ${recipientEmail}`,
+        });
+
+        jobsCreated++;
+
         // 2. Send email OUTSIDE transaction
         const result = await sendEmail({
           to: recipientEmail,
