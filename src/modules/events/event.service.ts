@@ -13,19 +13,19 @@ const log = createModuleLogger("event-service");
 
 export async function create(userId: string, data: CreateEventInput) {
 
-  const existing = await prisma.event.findUnique({
-    where: {
-      userId_idempotencyKey: {
-        userId,
-        idempotencyKey: data.idempotencyKey,
-      },
-    },
-    select: { id: true },
-  });
+  // const existing = await prisma.event.findUnique({
+  //   where: {
+  //     userId_idempotencyKey: {
+  //       userId,
+  //       idempotencyKey: data.idempotencyKey,
+  //     },
+  //   },
+  //   select: { id: true },
+  // });
 
-  if (existing) {
-    throw new ConflictError("Event with this idempotency key already exists");
-  }
+  // if (existing) {
+  //   throw new ConflictError("Event with this idempotency key already exists");
+  // }
 
 
   const event = await prisma.event.create({
@@ -38,27 +38,27 @@ export async function create(userId: string, data: CreateEventInput) {
     },
   });
 
-// Invoke Inngest workflow
-let queued = false;
-try {
-  await inngest.send({
-    name: "app/event.received",
-    data: { eventId: event.id },
-  });
-  queued = true;
-} catch (err) {
-  log.error({ err, eventId: event.id }, "Failed to send event to Inngest (Background processing will not start)");
-}
+  // Invoke Inngest workflow
+  let queued = false;
+  try {
+    await inngest.send({
+      name: "app/event.received",
+      data: { eventId: event.id },
+    });
+    queued = true;
+  } catch (err) {
+    log.error({ err, eventId: event.id }, "Failed to send event to Inngest (Background processing will not start)");
+  }
 
-log.info(
-  { 
-    eventId: event.id, 
-    eventType: data.eventType, 
-    idempotencyKey: data.idempotencyKey,
-    queued
-  },
-  queued ? "Event created and queued for processing" : "Event created but NOT queued (Inngest offline)"
-);
+  log.info(
+    {
+      eventId: event.id,
+      eventType: data.eventType,
+      idempotencyKey: data.idempotencyKey,
+      queued
+    },
+    queued ? "Event created and queued for processing" : "Event created but NOT queued (Inngest offline)"
+  );
 
   return event;
 }

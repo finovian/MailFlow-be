@@ -101,6 +101,7 @@ export async function processEvent(eventId: string): Promise<void> {
           continue;
         }
 
+
         timeline.push({
           step: "TRIGGER_EVALUATED",
           status: "SUCCESS",
@@ -110,37 +111,30 @@ export async function processEvent(eventId: string): Promise<void> {
 
         const rendered = renderEmail(trigger.template, payload);
 
+
+        // 1. Create job 
+        const job = await prisma.emailJob.create({
+          data: {
+            userId: event.userId,
+            eventId: event.id,
+            triggerId: trigger.id,
+            templateId: trigger.templateId,
+            recipientEmail,
+            renderedSubject: rendered.subject,
+            renderedHtml: rendered.html,
+            status: "PROCESSING",
+          },
+        });
+
+        // 2. Send email OUTSIDE transaction
+        const result = await sendEmail({
+          to: recipientEmail,
+          subject: rendered.subject,
+          html: rendered.html,
+        });
+
+        // 3. Update status INSIDE new transaction
         await prisma.$transaction(async (tx) => {
-          // Create EmailJob
-          const job = await tx.emailJob.create({
-            data: {
-              userId: event.userId,
-              eventId: event.id,
-              triggerId: trigger.id,
-              templateId: trigger.templateId,
-              recipientEmail,
-              renderedSubject: rendered.subject,
-              renderedHtml: rendered.html,
-              status: "PROCESSING",
-            },
-          });
-
-          timeline.push({
-            step: "EMAIL_JOB_CREATED",
-            status: "SUCCESS",
-            message: `Email job created for ${recipientEmail}`,
-          });
-
-          jobsCreated++;
-
-          // Send email
-          const result = await sendEmail({
-            to: recipientEmail,
-            subject: rendered.subject,
-            html: rendered.html,
-          });
-
-          // Update job status
           await tx.emailJob.update({
             where: { id: job.id },
             data: {
@@ -151,7 +145,6 @@ export async function processEvent(eventId: string): Promise<void> {
             },
           });
 
-          // Create SendLog
           await tx.sendLog.create({
             data: {
               userId: event.userId,
@@ -164,27 +157,20 @@ export async function processEvent(eventId: string): Promise<void> {
               errorMessage: result.error ?? null,
             },
           });
-
-          timeline.push({
-            step: "EMAIL_SENT",
-            status: result.success ? "SUCCESS" : "FAILED",
-            message: result.success ? "Email sent successfully" : result.error,
-          });
-
-          if (!result.success) {
-            hasFailures = true;
-          }
-
-          log.info(
-            {
-              jobId: job.id,
-              triggerId: trigger.id,
-              recipientEmail,
-              success: result.success,
-            },
-            "Email job processed",
-          );
         });
+
+        timeline.push({
+          step: "EMAIL_SENT",
+          status: result.success ? "SUCCESS" : "FAILED",
+          message: result.success ? "Email sent successfully" : result.error,
+        });
+
+        if (!result.success) {
+          hasFailures = true;
+        }
+
+
+
       } catch (triggerError) {
         hasFailures = true;
         log.error(
@@ -249,7 +235,7 @@ export async function processEvent(eventId: string): Promise<void> {
         }),
       },
     });
-
+    // Rethrow to allow for retry mechanisms if applicable 
     throw err;
   }
 }
